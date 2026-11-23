@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Находки с WB — каталог (демо)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  /* VOICE: живой канал находок — быстро, ярко, «смотри что нашёл»
+     IDEA: витрина канала: шапка канала, товар дня, полки-подборки, нижнее меню как в приложении
+     PICTURE: карточки товаров WB во всю плитку, большой «товар дня»
+     COLOUR/TYPE: тёмно-фиолетовый фон, градиент фиолетовый→розовый; Unbounded + Manrope
+     LAYOUT: шапка канала, баннер, поиск, чипсы, сетка 2 колонки, таб-бар снизу */
+  :root {
+    --bg: #0f0b16; --bg2: #171220; --card: #1c1627; --line: #2c2439;
+    --text: #f4effb; --hint: #9a90ab; --grad: linear-gradient(120deg, #a63bff, #f23d8f);
+    --violet: #b14dff; --pink: #ff4f9a; --green: #3ddc97; --radius: 18px;
+    --display: "Unbounded", "Arial Black", sans-serif; --sans: "Manrope", -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; min-width: 0; -webkit-tap-highlight-color: transparent; }
+  body { font-family: var(--sans); background: var(--bg); color: var(--text); max-width: 520px; margin: 0 auto; padding-bottom: 90px; overflow-x: clip; }
+  body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background: radial-gradient(circle at 90% 0%, rgba(166,59,255,.25), transparent 40%), radial-gradient(circle at 0% 50%, rgba(242,61,143,.12), transparent 40%); }
+  button, a { font: inherit; border: none; cursor: pointer; color: inherit; background: none; text-decoration: none; }
+  .hidden { display: none !important; }
+  svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ---------- Шапка канала ---------- */
+  .channel { display: flex; gap: 14px; align-items: center; padding: 18px 16px 6px; }
+  .ava { width: 74px; height: 74px; border-radius: 50%; flex: none; background: var(--grad); display: grid; place-items: center;
+         font: 800 30px var(--display); box-shadow: 0 10px 26px rgba(166,59,255,.4); position: relative; }
+  .ava::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid rgba(255,255,255,.12); }
+  .channel h1 { font: 800 21px/1.1 var(--display); }
+  .channel p { color: var(--hint); font-size: 13px; margin: 4px 0 10px; }
+  .ch-btns { display: flex; gap: 8px; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 12px; font-weight: 800; font-size: 13.5px; }
+  .btn.main { background: var(--grad); color: #fff; }
+  .btn.ghost { background: var(--card); border: 1px solid var(--line); width: 38px; justify-content: center; padding: 8px 0; }
+  .btn svg { width: 17px; height: 17px; }
+
+  /* ---------- Товар дня ---------- */
+  .daily { margin: 14px 16px 0; display: flex; gap: 14px; align-items: center; padding: 12px; border-radius: 22px; cursor: pointer;
+           background: linear-gradient(120deg, rgba(166,59,255,.25), rgba(242,61,143,.18)); border: 1px solid rgba(255,255,255,.08); }
+  .daily img { width: 92px; height: 122px; object-fit: cover; border-radius: 14px; flex: none; }
+  .daily small { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; background: #fff; color: #1a0f26; padding: 4px 8px; border-radius: 7px; }
+  .daily b { display: block; font-size: 15px; margin: 8px 0 4px; line-height: 1.25; }
+  .daily .pr { font: 800 18px var(--display); }
+  .daily .pr s { font: 500 12px var(--sans); color: var(--hint); margin-left: 6px; }
+  .daily .timer { font-size: 12px; color: var(--hint); margin-top: 4px; }
+
+  /* ---------- Поиск и фильтры ---------- */
+  .search { margin: 16px 16px 0; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); }
+  .search svg { color: var(--hint); flex: none; }
+  .search input { flex: 1; background: none; border: none; outline: none; color: var(--text); font: inherit; font-size: 16px; padding: 13px 0; }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 12px 16px 2px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar, .shelf::-webkit-scrollbar { display: none; }
+  .chip { flex: none; padding: 8px 14px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); font-size: 13.5px; font-weight: 700; transition: .2s; }
+  .chip.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .chip.price.active { background: var(--grad); color: #fff; border-color: transparent; }
+
+  .sec { display: flex; justify-content: space-between; align-items: baseline; padding: 18px 16px 8px; }
+  .sec h2 { font: 700 18px var(--display); }
+  .sec span { color: var(--hint); font-size: 13px; }
+
+  /* ---------- Сетка товаров ---------- */
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; padding: 0 16px 12px; }
+  .card { cursor: pointer; animation: appear .35s ease both; }
+  @keyframes appear { from { opacity: 0; transform: translateY(12px); } }
+  .ph { position: relative; aspect-ratio: 3/4; border-radius: var(--radius); overflow: hidden; background: #fff; }
+  .ph img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .3s; }
+  .card:active .ph img { transform: scale(.97); }
+  .sale { position: absolute; left: 8px; bottom: 8px; background: var(--pink); color: #fff; font-size: 11.5px; font-weight: 800; padding: 3px 8px; border-radius: 8px; }
+  .like { position: absolute; top: 8px; right: 8px; width: 34px; height: 34px; border-radius: 50%; background: rgba(15,11,22,.55); backdrop-filter: blur(6px);
+          display: grid; place-items: center; color: #fff; }
+  .like svg { width: 17px; height: 17px; }
+  .like.on { color: var(--pink); } .like.on svg { fill: var(--pink); }
+  .info { padding: 8px 2px 0; }
+  .price { font-weight: 800; font-size: 16px; } .price s { font-weight: 500; font-size: 12px; color: var(--hint); margin-left: 5px; }
+  .name { font-size: 13px; color: #d9d0e6; line-height: 1.3; margin: 3px 0 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 34px; }
+  .go { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 9px; border-radius: 12px; background: var(--grad); color: #fff; font-weight: 800; font-size: 13px; }
+  .go:active { opacity: .85; }
+  .empty { grid-column: 1/-1; text-align: center; color: var(--hint); padding: 40px 0; }
+
+  /* ---------- Подборки ---------- */
+  .coll { margin: 0 16px 18px; }
+  .coll h3 { font: 700 16px var(--display); margin-bottom: 4px; }
+  .coll p { color: var(--hint); font-size: 13px; margin-bottom: 10px; }
+  .shelf { display: flex; gap: 10px; overflow-x: auto; margin: 0 -16px; padding: 0 16px; scrollbar-width: none; }
+  .shelf .card { flex: none; width: 140px; }
+
+  /* ---------- Шторка товара ---------- */
+  .overlay { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.6); opacity: 0; pointer-events: none; transition: opacity .3s; }
+  .overlay.open { opacity: 1; pointer-events: auto; }
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; max-width: 520px; margin: 0 auto; max-height: 94vh; overflow-y: auto;
+           background: var(--bg2); border-radius: 26px 26px 0 0; transform: translateY(105%); transition: transform .4s cubic-bezier(.2,.9,.3,1); }
+  .sheet.open { transform: translateY(0); }
+  .sheet .close { position: absolute; top: 12px; right: 12px; z-index: 2; width: 38px; height: 38px; border-radius: 50%; background: rgba(15,11,22,.6); color: #fff; display: grid; place-items: center; }
+  .sheet .big { width: 100%; aspect-ratio: 3/4; max-height: 62vh; object-fit: contain; background: #fff; display: block; }
+  .sheet .body { padding: 16px 18px 22px; }
+  .sheet .price { font: 800 24px var(--display); } .sheet .price s { font: 500 14px var(--sans); }
+  .sheet h3 { font-size: 17px; margin: 6px 0 8px; line-height: 1.3; }
+  .sheet .desc { color: var(--hint); font-size: 14px; line-height: 1.5; margin-bottom: 16px; }
+  .sheet .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+  .sheet .tags span { font-size: 12px; font-weight: 700; background: var(--card); border: 1px solid var(--line); padding: 5px 10px; border-radius: 10px; }
+  .row-btns { display: grid; grid-template-columns: 1fr 52px 52px; gap: 8px; }
+  .row-btns .go { padding: 15px; font-size: 15px; border-radius: 14px; }
+  .sq { border-radius: 14px; background: var(--card); border: 1px solid var(--line); display: grid; place-items: center; }
+  .sq.on { color: var(--pink); } .sq.on svg { fill: var(--pink); }
+  .note { font-size: 11.5px; color: #6f6680; margin-top: 12px; text-align: center; }
+
+  /* ---------- Нижнее меню ---------- */
+  .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; max-width: 520px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr);
+            padding: 8px 10px 14px; background: rgba(15,11,22,.88); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-top: 1px solid var(--line); }
+  .tab { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11.5px; font-weight: 700; color: var(--hint); padding: 4px 0; position: relative; }
+  .tab .ic { width: 44px; height: 30px; border-radius: 12px; display: grid; place-items: center; transition: .2s; }
+  .tab.active { color: var(--text); } .tab.active .ic { background: var(--grad); color: #fff; }
+  .tab .badge { position: absolute; top: 0; left: calc(50% + 10px); min-width: 18px; height: 18px; border-radius: 9px; background: var(--pink); color: #fff; font-size: 10.5px; display: grid; place-items: center; padding: 0 4px; }
+  .toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%) translateY(20px); opacity: 0; z-index: 60; background: var(--text); color: var(--bg);
+           font-weight: 700; font-size: 13.5px; padding: 10px 16px; border-radius: 12px; transition: .3s; pointer-events: none; white-space: nowrap; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .demo-note { font-size: 11.5px; color: #6f6680; text-align: center; padding: 6px 24px 16px; line-height: 1.4; }
+  @media (prefers-reduced-motion: reduce) { .card { animation: none; } }
+</style>
+</head>
+<body>
+
+<!-- ===== Главная ===== -->
+<section id="home">
+  <div class="channel">
+    <div class="ava">Н</div>
+    <div>
+      <h1>Находки с WB</h1>
+      <p>Полезное и красивое с Wildberries каждый день</p>
+      <div class="ch-btns">
+        <button class="btn main" onclick="App.toast('В демо — здесь будет ссылка на ваш канал')"><svg class="i" viewBox="0 0 24 24"><path d="M21 4L3 11l6 2 2 7 3-4 5 4z"/></svg>Канал</button>
+        <button class="btn ghost" onclick="App.share()" aria-label="Поделиться"><svg class="i" viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 13v6h14v-6"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="daily" id="daily"></div>
+
+  <label class="search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+    <input id="q" placeholder="Поиск: пылесос, подарок, гирлянда…" oninput="App.search(this.value)"></label>
+  <div class="chips" id="cats"></div>
+  <div class="chips" id="prices"></div>
+
+  <div class="sec"><h2>Все находки</h2><span id="count"></span></div>
+  <div class="grid" id="grid"></div>
+  <p class="demo-note">Демо-версия. Цены примерные — актуальная цена всегда на Wildberries. В рабочей версии кнопки ведут по партнёрским ссылкам канала.</p>
+</section>
+
+<!-- ===== Подборки ===== -->
+<section id="colls" class="hidden">
+  <div class="sec"><h2>Подборки</h2><span>от админа канала</span></div>
+  <div id="collList"></div>
+</section>
+
+<!-- ===== Избранное ===== -->
+<section id="favs" class="hidden">
+  <div class="sec"><h2>Избранное</h2><span id="favCount"></span></div>
+  <div class="grid" id="favGrid"></div>
+</section>
+
+<div class="overlay" id="overlay" onclick="App.close()"></div>
+<div class="sheet" id="sheet"></div>
+<div class="toast" id="toast"></div>
+
+<nav class="tabbar">
+  <button class="tab active" data-tab="home" onclick="App.tab('home')"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M3 10l9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></span>Главная</button>
+  <button class="tab" data-tab="colls" onclick="App.tab('colls')"><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg></span>Подборки</button>
+  <button class="tab" data-tab="favs" onclick="App.tab('favs')"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/></svg></span>Избранное<span class="badge hidden" id="favBadge">0</span></button>
+</nav>
+
+<script>
+{
+const tg = window.Telegram ? window.Telegram.WebApp : null;
+if (tg) { tg.ready(); tg.expand(); try { tg.setHeaderColor('#0f0b16'); tg.setBackgroundColor('#0f0b16'); } catch (e) {} }
+const vibrate = (t = 'light') => { try { tg && tg.HapticFeedback.impactOccurred(t); } catch (e) {} };
+
+// ---------- ТОВАРЫ. Админ канала добавляет: фото, название, цену, категорию и свою ссылку ----------
+const WB = id => `https://www.wildberries.ru/catalog/${id}/detail.aspx`;
+const items = [
+  { id: 1,  img: 'w1.jpg',  name: 'Яндекс ИИ-камера для дома, 2K, работает с Алисой', price: 4990, old: 6990, cat: 'Техника', url: WB(437172654),
+    desc: 'Камера для безопасности дома: ночная съёмка, 2K, понимает, что происходит в кадре, и присылает уведомления.' },
+  { id: 2,  img: 'w2.jpg',  name: 'Чокер плетёный, набор 2 шт', price: 249, cat: 'Аксессуары', url: WB(986107949),
+    desc: 'Тот самый чокер из 2000-х. Подходит под любой лук, в наборе две штуки.' },
+  { id: 3,  img: 'w3.jpg',  name: 'Люстра светодиодная 28 Вт, до 20 м²', price: 1290, old: 1990, cat: 'Дом', url: WB(198270862),
+    desc: 'Тонкий потолочный светильник, ставится за 10 минут. Яркий ровный свет на комнату до 20 м².' },
+  { id: 4,  img: 'w4.jpg',  name: 'Кронштейн для телевизора 17–43", наклонно-поворотный', price: 990, cat: 'Техника', url: WB(5691260),
+    desc: 'Выдерживает до 25 кг, поворачивается и наклоняется. VESA от 75×75 до 200×200.' },
+  { id: 5,  img: 'w5.jpg',  name: 'Power bank 50 000 mAh с 4 кабелями и дисплеем', price: 2490, old: 3990, cat: 'Техника', url: WB(297600033),
+    desc: 'Хватит на несколько зарядок телефона. Быстрая зарядка 22,5 Вт, встроенные кабели — ничего не нужно носить отдельно.' },
+  { id: 6,  img: 'w6.jpg',  name: 'Стельки из натурального войлока, 2 пары', price: 299, cat: 'Зима', url: WB(258414903),
+    desc: 'Тёплые стельки из 100% войлока. Спасают в мороз до −50°C.' },
+  { id: 7,  img: 'w7.jpg',  name: 'Электробрашинг 5 в 1 для укладки', price: 2990, old: 4490, cat: 'Красота', url: WB(1522241279),
+    desc: 'Сушит и укладывает одновременно, дисплей температуры. Салонная укладка за 5 минут.' },
+  { id: 8,  img: 'w8.jpg',  name: 'Машинка для удаления катышков, 3 режима', price: 1490, cat: 'Дом', url: WB(316357447),
+    desc: 'Аккумуляторная, работает до 3 часов, в комплекте 6 лезвий. Свитера как новые.' },
+  { id: 9,  img: 'w9.jpg',  name: 'Гриль-мангал 3 в 1 ROASTER с коптильней', price: 12990, old: 15990, cat: 'Дача', url: WB(133002290),
+    desc: 'Мангал, коптильня и варочная печь в одном. Два уровня шампуров, в подарок кочерга и совок.' },
+  { id: 10, img: 'w10.jpg', name: 'Ёлочные сосульки, 50 шт, акрил 13 см', price: 590, cat: 'Зима', url: WB(17112432),
+    desc: 'Прозрачные сосульки на ёлку — красиво блестят от гирлянды и не бьются. Сделано в России.' },
+  { id: 11, img: 'w11.jpg', name: 'Вакуумный отпариватель 3500 Вт', price: 3490, old: 4990, cat: 'Дом', url: WB(1275618634),
+    desc: 'Гладит на весу и сразу собирает шерсть и пыль. Без доски и капель.' },
+  { id: 12, img: 'w12.jpg', name: 'Моющий пылесос HOLDY для мебели и авто', price: 8990, cat: 'Дом', url: WB(501410631),
+    desc: 'Чистит диваны, ковры и салон машины. 6 насадок, функция самоочистки.' },
+  { id: 13, img: 'w13.jpg', name: 'Диффузор для дома «Табак и ваниль», 50 мл', price: 890, cat: 'Подарки', url: WB(814963801),
+    desc: 'Уютный аромат для дома в красивой упаковке — готовый подарок.' },
+  { id: 14, img: 'w14.jpg', name: 'Универсальная чистящая паста, 1 кг', price: 399, cat: 'Дом', url: WB(679106118),
+    desc: 'Отмывает плиту, раковину, кроссовки и ещё сотню вещей. Банки хватает надолго.' },
+];
+const DAILY = 5;
+const cats = ['Все', ...new Set(items.map(i => i.cat))];
+const priceFilters = [['Любая цена', Infinity], ['до 500 ₽', 500], ['до 1 000 ₽', 1000], ['до 3 000 ₽', 3000]];
+const collections = [
+  { title: 'Подарки до 1 000 ₽', text: 'Недорого, но приятно — на Новый год коллегам и друзьям', ids: [13, 10, 2, 6, 14] },
+  { title: 'Уют зимой', text: 'Свет, ароматы и тепло для дома', ids: [3, 13, 10, 6] },
+  { title: 'Чистота без нервов', text: 'Техника, которая делает уборку быстрее', ids: [12, 11, 8, 14] },
+  { title: 'Полезные гаджеты', text: 'То, что реально пригодится каждый день', ids: [5, 1, 4] },
+];
+
+// ---------- Состояние ----------
+let cat = 'Все', maxPrice = Infinity, query = '', likes = new Set(), current = null;
+try { likes = new Set(JSON.parse(localStorage.getItem('likes') || '[]')); } catch (e) {}
+const saveLikes = () => { try { localStorage.setItem('likes', JSON.stringify([...likes])); } catch (e) {} };
+
+// ---------- Помощники ----------
+const $ = id => document.getElementById(id);
+const fmt = n => n.toLocaleString('ru-RU') + ' ₽';
+const byId = id => items.find(i => i.id === id);
+const heart = '<svg class="i" viewBox="0 0 24 24"><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/></svg>';
+const pct = i => i.old ? Math.round((1 - i.price / i.old) * 100) : 0;
+function openLink(url) {
+  vibrate('medium');
+  if (tg && tg.openLink) { tg.openLink(url); return false; }
+  window.open(url, '_blank'); return false;
+}
+function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('show'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 2200); }
+
+const card = (i, k = 0) => `
+  <div class="card" style="animation-delay:${k * 40}ms" onclick="App.open(${i.id})">
+    <div class="ph"><img src="${i.img}" alt="${i.name}" loading="lazy">
+      ${i.old ? `<span class="sale">−${pct(i)}%</span>` : ''}
+      <button class="like ${likes.has(i.id) ? 'on' : ''}" onclick="event.stopPropagation();App.like(${i.id})" aria-label="В избранное">${heart}</button>
+    </div>
+    <div class="info">
+      <div class="price">${fmt(i.price)}${i.old ? `<s>${fmt(i.old)}</s>` : ''}</div>
+      <div class="name">${i.name}</div>
+      <a class="go" href="${i.url}" onclick="event.stopPropagation();return App.go(${i.id})">Купить на WB</a>
+    </div>
+  </div>`;
+
+// ---------- Отрисовка ----------
+function renderHome() {
+  const d = byId(DAILY);
+  $('daily').innerHTML = `<img src="${d.img}" alt=""><div><small>🔥 Товар дня</small><b>${d.name}</b>
+    <div class="pr">${fmt(d.price)}<s>${fmt(d.old)}</s></div><div class="timer" id="timer"></div></div>`;
+  $('daily').onclick = () => open(DAILY);
+  $('cats').innerHTML = cats.map(c => `<button class="chip ${c === cat ? 'active' : ''}" onclick="App.cat('${c}')">${c}</button>`).join('');
+  $('prices').innerHTML = priceFilters.map(([t, v]) => `<button class="chip price ${v === maxPrice ? 'active' : ''}" onclick="App.price(${v === Infinity ? 'Infinity' : v})">${t}</button>`).join('');
+  const q = query.trim().toLowerCase();
+  const list = items.filter(i => (cat === 'Все' || i.cat === cat) && i.price <= maxPrice && (!q || (i.name + ' ' + i.desc + ' ' + i.cat).toLowerCase().includes(q)));
+  $('count').textContent = list.length + ' шт';
+  $('grid').innerHTML = list.map(card).join('') || `<div class="empty">Ничего не нашлось 🤷<br>Попробуйте другой запрос</div>`;
+}
+function renderColls() {
+  $('collList').innerHTML = collections.map(c => `<div class="coll"><h3>${c.title}</h3><p>${c.text}</p>
+    <div class="shelf">${c.ids.map(byId).map(card).join('')}</div></div>`).join('');
+}
+function renderFavs() {
+  const list = items.filter(i => likes.has(i.id));
+  $('favCount').textContent = list.length ? list.length + ' шт' : '';
+  $('favGrid').innerHTML = list.map(card).join('') || `<div class="empty">Нажимайте ♡ на товарах —<br>они сохранятся здесь</div>`;
+  $('favBadge').textContent = likes.size; $('favBadge').classList.toggle('hidden', !likes.size);
+}
+function renderAll() { renderHome(); renderColls(); renderFavs(); }
+
+// ---------- Шторка товара ----------
+function open(id) {
+  current = byId(id);
+  const i = current;
+  $('sheet').innerHTML = `
+    <button class="close" onclick="App.close()" aria-label="Закрыть"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <img class="big" src="${i.img}" alt="${i.name}">
+    <div class="body">
+      <div class="price">${fmt(i.price)}${i.old ? `<s>${fmt(i.old)}</s>` : ''}</div>
+      <h3>${i.name}</h3>
+      <p class="desc">${i.desc}</p>
+      <div class="tags"><span>${i.cat}</span>${i.old ? `<span>Скидка ${pct(i)}%</span>` : ''}<span>Wildberries</span></div>
+      <div class="row-btns">
+        <a class="go" href="${i.url}" onclick="return App.go(${i.id})">Купить на Wildberries</a>
+        <button class="sq ${likes.has(i.id) ? 'on' : ''}" onclick="App.like(${i.id}, true)" aria-label="В избранное">${heart}</button>
+        <button class="sq" onclick="App.share(${i.id})" aria-label="Поделиться"><svg class="i" viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 13v6h14v-6"/></svg></button>
+      </div>
+      <p class="note">Цена в демо примерная — актуальная на Wildberries</p>
+    </div>`;
+  $('overlay').classList.add('open'); $('sheet').classList.add('open'); $('sheet').scrollTop = 0; vibrate();
+}
+function close() { $('overlay').classList.remove('open'); $('sheet').classList.remove('open'); }
+
+// ---------- Действия ----------
+window.App = {
+  open, close, toast,
+  go: id => openLink(byId(id).url),
+  cat: c => { cat = c; vibrate(); renderHome(); },
+  price: v => { maxPrice = v; vibrate(); renderHome(); },
+  search: v => { query = v; renderHome(); },
+  like: (id, inSheet) => {
+    likes.has(id) ? likes.delete(id) : likes.add(id); saveLikes(); vibrate();
+    toast(likes.has(id) ? 'Добавлено в избранное' : 'Убрано из избранного');
+    renderAll(); if (inSheet) open(id);
+  },
+  share: id => {
+    const i = id ? byId(id) : null;
+    const text = i ? `${i.name} — ${fmt(i.price)}` : 'Находки с WB — лучшее с Wildberries';
+    const url = 'https://t.me/share/url?url=' + encodeURIComponent(i ? i.url : 'https://t.me/') + '&text=' + encodeURIComponent(text);
+    if (tg && tg.openTelegramLink) tg.openTelegramLink(url); else toast('В Telegram откроется «Поделиться»');
+  },
+  tab: t => {
+    ['home', 'colls', 'favs'].forEach(s => $(s).classList.toggle('hidden', s !== t));
+    document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+    window.scrollTo(0, 0); vibrate();
+  },
+};
+
+// Таймер «товар дня» до полуночи
+const end = new Date(); end.setHours(23, 59, 59, 0);
+const tick = () => { const s = Math.max(0, Math.floor((end - new Date()) / 1000)), el = $('timer');
+  if (el) el.textContent = 'Цена действует ещё ' + [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60].map(v => String(v).padStart(2, '0')).join(':'); };
+renderAll(); tick(); setInterval(tick, 1000);
+}
+</script>
+</body>
+</html>
